@@ -36,3 +36,13 @@ CREATE TABLE bookings (
     booking_type char(25),
     capacity INT
 );
+
+INSERT INTO bookings
+    (
+       space_id, booking_type, capacity
+    )
+VALUES
+    (MODIIFY, 'PCs', 10),
+    (MODIFY, 'Rooms', 5),
+    (MODIFY, 'Desks', 20);
+
