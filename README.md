@@ -21,4 +21,9 @@ is in [JSON](https://www.json.org/json-en.html) and looks like:
 ```
 This can be used with a javascript widget for displaying ongoing capacty status.
 
+The _report.php_ script can be used for statistics. It shows the numbers for
+the current day by default and can be used to export all of the dates.
+
+<img src="https://github.com/ledwebdev/counter/blob/main/report.png?raw=true" width="70%" height="70%">
+
 art rhyno [ourdigitalworld/cdigs](https://github.com/artunit)
