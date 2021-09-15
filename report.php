@@ -75,7 +75,6 @@ function getVisits($conn, $sql_start, $sql_end, $dstr1, $dstr2) {
     $range_sql = $sql_start . "'" . $dstr1 .
 	"' and '" . $dstr2 .
 	"'" . $sql_end;
-    //echo "=>" . $range_sql . "\n";
     $result = $conn->query($range_sql);
     return $result;
 }
@@ -151,7 +150,7 @@ if(!isset($_POST['export'])) {
     header('Expires: 0');
     $fp = fopen('php://output', 'w');
 
-    fputcsv($fp, array("Daee","Hour","Visits","Exits","In-Building"));
+    fputcsv($fp, array("Date","Hour Begins","Visits","Exits","In-Building"));
     foreach ($entries as $entry) {
 	if ($last_date != $entry["date"]) $walk_ins = 0;
 	$walk_ins += $entry["num"];
@@ -171,7 +170,7 @@ $conn->close();
 ?>
 
 <?php if(!isset($_POST['export'])) : ?>
-<br clear="left"/>
+<p>Numbers generated: <i><?php echo date("h:i:s A") ?></i></p>
 <form method="post">
    <input type="submit" name="export" class="export" 
        value="Export data for all dates" />
