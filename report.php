@@ -39,6 +39,47 @@ table {
 <?php endif; ?>
 <?php
 
+<?php if(!isset($_POST['export'])) : ?>
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>
+    Leddy Library Counter Report
+    </title>
+<style>
+.export {
+  display: block;
+  width: 25%;
+  border-radius: 50px;
+  background-color: green;
+  color: white;
+  padding: 14px 28px;
+  font-size: 16px;
+  cursor: pointer;
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 25px;
+}
+table {
+  margin-left: auto;
+  margin-right: auto;
+}
+.report tr, td, th {
+  border: 1px solid black;
+}
+</style>
+</head>
+
+<body style="text-align:center;">
+
+    <h1 style="color:green;">
+    Leddy Library Counter Report
+    </h1>
+<?php endif; ?>
+<?php
+
 date_default_timezone_set('America/New_York');
 $servername = "localhost";
 $username = "MODIFY";
@@ -60,6 +101,26 @@ $sql_dstart = "select count(depart) as num, hour(depart) as hour, date(depart) "
 	"as date from departures where depart between ";
 $sql_vend = " group by date(entry), hour(entry) order by date(entry), hour(entry);";
 $sql_dend = " group by date(depart), hour(depart) order by date(depart), hour(depart);";
+
+$sql_entries = "select date_format(entry,'%Y-%m-%d_%H-%i') as min_entry, " .
+        "date_format(entry,'%Y-%m-%d') as day_entry, count(id) as min_count " .
+        "from visits where entry > '" . $epoch . "' group by day_entry, min_entry;";
+
+$sql_exits = "select date_format(depart,'%Y-%m-%d_%H-%i') as min_exit, " .
+        "date_format(depart,'%Y-%m-%d') as day_exit, " .
+        "count(id) as min_count from departures " .
+	"where depart > '" . $epoch . "' " .
+        "group by day_exit, min_exit;";
+
+$sql_entries_d = "select date_format(entry,'%Y-%m-%d_%H-%i') as min_entry, " .
+        "date_format(entry,'%Y-%m-%d') as day_entry, count(id) as min_count " .
+        "from visits where entry>=curdate() " .
+        "group by day_entry, min_entry;";
+
+$sql_exits_d = "select date_format(depart,'%Y-%m-%d_%H-%i') as min_exit, " .
+        "date_format(depart,'%Y-%m-%d') as day_exit, count(id) as min_count " .
+        "from departures where depart>=curdate() " .
+        "group by day_exit, min_exit;";
 
 function getDoW() {
 	$today = date("Y-m-d");
@@ -94,6 +155,62 @@ function sortOutOnSite($exits,$date,$hour,$walk_ins) {
     return $slot;
 }
 
+function minsSoFar(&$exits,$day,$min) {
+    $cur_min = date_create_from_format('Y-m-d_H-i',$min);
+    $min_cnt = 0;
+    foreach ($exits as $key=>$exit) {
+	    if ($exit["day_exit"] == $day) {
+		    $exit_min = date_create_from_format("Y-m-d_H-i",
+			    $exit["min_exit"]);
+		    
+		    if ($cur_min >= $exit_min) {
+			    $min_cnt += intval($exit["min_count"]);
+			    unset($exits[$key]);
+		    } else {
+			    break;
+		    }//if
+
+            }//if
+    }//foreach
+
+    return $min_cnt;
+}
+
+function resultToArray($sql_results) {
+    $rows = [];
+    foreach ($sql_results as $result) {
+	$rows[] = $result;
+    }//while
+    return $rows;
+}
+
+function sortOutMins($conn, $sql_e, $sql_d) {
+    $sentries = $conn->query($sql_e);
+    $entries = resultToArray($sentries);
+    $sexits = $conn->query($sql_d);
+    $exits = resultToArray($sexits);
+    $high_min = 0;
+    $hmins = 0;
+    $prev_day = "";
+
+    foreach ($entries as $entry) {
+	    if ($prev_day != $entry["day_entry"]) $hmins = 0;
+	    $hmins += intval($entry["min_count"]);
+	    $dmins = minsSoFar($exits,$entry["day_entry"],
+		    $entry["min_entry"]);
+	    $hmins -= $dmins;
+	    if ($hmins > $high_min) {
+		    $high_min = $hmins;
+		    $hmin = $entry["min_entry"];
+	    }//if
+	    $prev_day = $entry["day_entry"];
+    }//foreach
+
+    $high_pt = array_merge(array("high_min" => $high_min),
+	    array("hmin" => $hmin));
+    return $high_pt;
+}
+
 $dow = getDoW();
 $sql = $sql_hours . $dow . ";";
 $result = $conn->query($sql);
@@ -120,11 +237,25 @@ $walk_ins = 0;
 $last_date = "0-0-0";
 
 if(!isset($_POST['export'])) {
+    //get highwater count for all dates since epoch
+    $high_pt = sortOutMins($conn, $sql_entries, $sql_exits);
+    $high_min = $high_pt["high_min"];
+    $hmin = date_create_from_format("Y-m-d_H-i", $high_pt["hmin"]);
+
+    //get highwater count for today
+    $high_pt_d = sortOutMins($conn, $sql_entries_d, $sql_exits_d);
+    $high_min_d = $high_pt_d["high_min"];
+    $hmin_d = date_create_from_format("Y-m-d_H-i", $high_pt_d["hmin"]);
+
+    echo "<h4>Highest number in building (so far): <em>$high_min</em></h4>\n";
+    echo "<h4>Recorded at: <em>" . $hmin->format('Y-m-d h:i A') . "</em></h4>\n";
+    echo "<h4>Highest number today (so far):<em> $high_min_d</em></h4>\n";
+    echo "<h4>Recorded at: <em>" . $hmin_d->format('h:i A') . "</em></h4>\n";
     echo "<table class=report>\n";
     echo "<tr><th>Date</th>\n";
-    echo "<th>Hour</th>\n";
-    echo "<th>Visits</th>\n";
-    echo "<th>Exits</th>\n";
+    echo "<th>Hour Begins</th>\n";
+    echo "<th>Visits (per hour)</th>\n";
+    echo "<th>Exits (per hour)</th>\n";
     echo "<th>In-Building</th></tr>\n";
     
     foreach ($entries as $entry) {
@@ -150,7 +281,7 @@ if(!isset($_POST['export'])) {
     header('Expires: 0');
     $fp = fopen('php://output', 'w');
 
-    fputcsv($fp, array("Date","Hour Begins","Visits","Exits","In-Building"));
+    fputcsv($fp, array("Date","Hour","Visits (per hour)","Exits (per hour)","In-Building"));
     foreach ($entries as $entry) {
 	if ($last_date != $entry["date"]) $walk_ins = 0;
 	$walk_ins += $entry["num"];
@@ -170,7 +301,7 @@ $conn->close();
 ?>
 
 <?php if(!isset($_POST['export'])) : ?>
-<p>Numbers generated: <i><?php echo date("h:i:s A") ?></i></p>
+<p>Numbers generated: <i><?php echo date("Y-m-d h:i:s A") ?></i></p>
 <form method="post">
    <input type="submit" name="export" class="export" 
        value="Export data for all dates" />
